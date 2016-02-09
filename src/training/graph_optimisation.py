@@ -68,3 +68,55 @@ def run_embedding(tf_graph, optimizer, loss, similarity, normalized_embeddings,
                         log = "%s %s," % (log, close_word)
                     print(log)
         return normalized_embeddings.eval()
+
+def run_lstm(tf_graph, optimizer, loss, reset_sample_state, tf_predictions,
+    train_batches, valid_batches, valid_size, num_steps, char_func, summary_frequency):
+    with tf.Session(graph=tf_graph['graph']) as session:
+        tf.initialize_all_variables().run()
+
+        mean_loss = 0
+        for step in range(num_steps):
+            batches = train_batches.next()
+            input_size = batches[0].shape[1]
+            feed_dict = dict()
+            for i in range(len(tf_graph['data_ph'])):
+                feed_dict[tf_graph['data_ph'][i]] = batches[i]
+
+            _, l, predictions = session.run([optimizer, loss, tf_predictions[0]], feed_dict=feed_dict)
+            mean_loss += l
+
+            if step % summary_frequency == 0:
+                if step > 0:
+                    mean_loss = mean_loss / summary_frequency
+                # The mean loss is an estimate of the loss over the last few batches.
+                print('Average loss at step', step, ':', mean_loss)
+                mean_loss = 0
+
+                labels = np.concatenate(list(batches)[1:])
+                print('Minibatch perplexity: %.2f'
+                    % float(np.exp(training.utils.logprob(predictions, labels))))
+
+                if step % (summary_frequency * 10) == 0:
+                    # Generate some samples.
+                    print('=' * 80)
+                    for _ in range(5):
+                        feed = training.utils.sample(
+                            training.utils.random_distribution(input_size))
+                        sentence = char_func(feed)[0]
+                        reset_sample_state.run()
+                        for _ in range(79):
+                            prediction = tf_predictions[1].eval({tf_graph['sample_ph']: feed})
+                            feed = training.utils.sample(prediction)
+                            sentence += char_func(feed)[0]
+                        print(sentence)
+                    print('=' * 80)
+
+                # Measure validation set perplexity.
+                reset_sample_state.run()
+                valid_logprob = 0
+                for _ in range(valid_size):
+                    b = valid_batches.next()
+                    predictions = tf_predictions[1].eval({tf_graph['sample_ph']: b[0]})
+                    valid_logprob = valid_logprob + training.utils.logprob(predictions, b[1])
+                print('Validation set perplexity: %.2f' % float(np.exp(
+                    valid_logprob / valid_size)))
