@@ -1,5 +1,7 @@
 import numpy as np
+from matplotlib import pylab
 import random
+from sklearn.manifold import TSNE
 import tensorflow as tf
 
 def gaussian_weights_variable(shape):
@@ -50,3 +52,17 @@ def random_distribution(alphabet_size):
     """Generate a random column of probabilities."""
     b = np.random.uniform(0.0, 1.0, size=[1, alphabet_size])
     return b/np.sum(b, 1)[:,None]
+
+# Applies non-linear dimensionalty reduction using tSNE and plots
+# the words.
+def plot_embedding(embeddings, labels):
+    tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000)
+    two_d_embeddings = tsne.fit_transform(embeddings)
+
+    pylab.figure(figsize=(15,15))  # in inches
+    for i, label in enumerate(labels):
+        x, y = two_d_embeddings[i,:]
+        pylab.scatter(x, y)
+        pylab.annotate(label, xy=(x, y), xytext=(5, 2),
+            textcoords='offset points', ha='right', va='bottom')
+    pylab.show()
