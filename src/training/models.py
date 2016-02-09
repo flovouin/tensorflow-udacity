@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 import training.utils
 
@@ -92,3 +93,97 @@ def fully_connected_model(input_size, num_labels, num_hidden_nodes,
     tf_predictions = [train_prediction, valid_prediction, test_prediction]
 
     return tf_graph, optimizer, loss, tf_predictions
+
+# Skip-gram.
+def skipgram_model(vocabulary_size, embedding_size, batch_size, num_sampled, valid_examples,
+    learning_rate):
+    graph = tf.Graph()
+    with graph.as_default():
+        # Input data.
+        tf_train_dataset = tf.placeholder(tf.int32, shape=[batch_size])
+        tf_train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
+
+        # Variables.
+        embeddings = tf.Variable(tf.random_uniform([vocabulary_size, embedding_size], -1.0, 1.0))
+        # This is actually transposed compared to usual layer weights. The std is
+        # deduced accordingly, from the input size (embedding_size).
+        softmax_weights = tf.Variable(tf.truncated_normal([vocabulary_size, embedding_size],
+                               stddev=1.0 / np.sqrt(embedding_size)))
+        softmax_biases = tf.Variable(tf.zeros([vocabulary_size]))
+
+        # Model.
+        # Look up embeddings for inputs.
+        embed = tf.nn.embedding_lookup(embeddings, tf_train_dataset)
+        # Compute the softmax loss, using a sample of the negative labels each time.
+        loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(
+            softmax_weights, softmax_biases, embed, tf_train_labels, num_sampled, vocabulary_size))
+
+        # Optimizer.
+        optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss)
+
+        # Compute the similarity between minibatch examples and all embeddings.
+        # We use the cosine distance:
+        norm = tf.sqrt(tf.reduce_sum(tf.square(embeddings), 1, keep_dims=True))
+        normalized_embeddings = embeddings / norm
+
+        similarity = None
+        if valid_examples is not None:
+            valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
+            valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings, valid_dataset)
+            similarity = tf.matmul(valid_embeddings, tf.transpose(normalized_embeddings))
+
+    tf_graph = {
+        'graph': graph,
+        'data_ph': tf_train_dataset,
+        'labels_ph': tf_train_labels }
+
+    return tf_graph, optimizer, loss, normalized_embeddings, similarity
+
+def cbow_model(vocabulary_size, embedding_size, context_length, batch_size,
+    num_sampled, valid_examples, learning_rate):
+    input_batch_size = context_length * batch_size
+
+    graph = tf.Graph()
+    with graph.as_default():
+        # Input data.
+        tf_train_dataset = tf.placeholder(tf.int32, shape=[input_batch_size])
+        tf_train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
+
+        word_mean_op = tf.constant(
+            np.kron(np.eye(batch_size), np.ones([1, context_length])), dtype=tf.float32)
+
+        # Variables.
+        embeddings = tf.Variable(tf.random_uniform(
+            [vocabulary_size, embedding_size], -1.0, 1.0))
+        softmax_weights = tf.Variable(tf.truncated_normal(
+            [vocabulary_size, embedding_size], stddev=1.0 / np.sqrt(embedding_size)))
+        softmax_biases = tf.Variable(tf.zeros([vocabulary_size]))
+
+        # Model.
+        # Look up embeddings for inputs.
+        embed = tf.nn.embedding_lookup(embeddings, tf_train_dataset)
+        word_means = tf.matmul(word_mean_op, embed)
+        # Compute the softmax loss, using a sample of the negative labels each time.
+        loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(
+            softmax_weights, softmax_biases, word_means, tf_train_labels, num_sampled, vocabulary_size))
+
+        # Optimizer.
+        optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss)
+
+        # Compute the similarity between minibatch examples and all embeddings.
+        # We use the cosine distance:
+        norm = tf.sqrt(tf.reduce_sum(tf.square(embeddings), 1, keep_dims=True))
+        normalized_embeddings = embeddings / norm
+
+        similarity = None
+        if valid_examples is not None:
+            valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
+            valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings, valid_dataset)
+            similarity = tf.matmul(valid_embeddings, tf.transpose(normalized_embeddings))
+
+    tf_graph = {
+        'graph': graph,
+        'data_ph': tf_train_dataset,
+        'labels_ph': tf_train_labels }
+
+    return tf_graph, optimizer, loss, normalized_embeddings, similarity
