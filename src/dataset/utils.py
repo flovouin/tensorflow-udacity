@@ -34,6 +34,7 @@ def accuracy(predictions, labels):
 
 # Character conversion.
 first_letter = ord(string.ascii_lowercase[0])
+alphabet_size = len(string.ascii_lowercase) + 1 # [a-z] + ' '
 
 def char2id(char):
     if char in string.ascii_lowercase:
@@ -66,3 +67,29 @@ def batches2string(batches):
 def ids(chars):
     """Converts characters to IDs."""
     return [char2id(c) for c in chars]
+
+def char2bigrams(text):
+    bitext_length = len(text) // 2
+    bitext = np.empty([bitext_length], dtype=int)
+    for i in range(bitext_length):
+        bitext[i] = text[2*i] * alphabet_size + text[2*i + 1]
+    return bitext
+
+def bigrams2char(bigrams):
+    chars = []
+    for b in range(len(bigrams)):
+        chr1 = bigrams[b] // alphabet_size
+        chr2 = bigrams[b] - chr1 * alphabet_size
+        chars.append(''.join([id2char(chr1), id2char(chr2)]))
+    return chars
+
+def biprobstochar(probabilities):
+    return bigrams2char(np.argmax(probabilities, 1))
+
+def bibatches2string(bibatches):
+    """Convert a sequence of batches back into their (most likely) string
+    representation."""
+    s = [''] * bibatches[0].shape[0]
+    for b in bibatches:
+        s = [''.join(x) for x in zip(s, biprobstochar(b))]
+    return s
