@@ -1,5 +1,12 @@
+# Provides a set function that run the iterative optimisation
+# of various models.
+# Derived from Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
+
 import numpy as np
 import tensorflow as tf
+
 from dataset.utils import accuracy
 from dataset import utils
 import training.utils
@@ -7,18 +14,18 @@ import training.utils
 def run(tf_graph, optimizer, loss, tf_predictions,
     train_dataset, train_labels, valid_labels, test_labels,
     num_steps, batch_size, verbose_frequency = 500):
-    """"""
+    """Runs the optimisation of a regular forward neural network."""
     with tf.Session(graph=tf_graph['graph']) as session:
         tf.initialize_all_variables().run()
 
         for step in range(num_steps):
             offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
 
-            # Generate a minibatch.
+            # Generates a minibatch.
             batch_data = train_dataset[offset:(offset + batch_size)]
             batch_labels = train_labels[offset:(offset + batch_size)]
 
-            # Running one step of the optimisation.
+            # Runs one step of the optimisation.
             _, l, train_predictions = session.run([optimizer, loss, tf_predictions[0]],
                 feed_dict={
                     tf_graph['data_ph'] : batch_data,
@@ -34,6 +41,7 @@ def run(tf_graph, optimizer, loss, tf_predictions,
 def run_embedding(tf_graph, optimizer, loss, similarity, normalized_embeddings,
     batches, valid_examples, reverse_dictionary, num_steps,
     verbose_loss_frequency = 2000, verbose_frequency = 10000):
+    """Runs the optimisation of a word embedding model."""
     valid_verbose = (similarity is not None) and (valid_examples is not None) \
         and (reverse_dictionary is not None)
 
@@ -45,9 +53,9 @@ def run_embedding(tf_graph, optimizer, loss, similarity, normalized_embeddings,
             batch_data, batch_labels = batches.next()
 
             _, l = session.run([optimizer, loss],
-                    feed_dict={
-                        tf_graph['data_ph'] : batch_data,
-                        tf_graph['labels_ph'] : batch_labels})
+                feed_dict={
+                    tf_graph['data_ph'] : batch_data,
+                    tf_graph['labels_ph'] : batch_labels})
             average_loss += l
 
             if step % verbose_loss_frequency == 0:
@@ -56,11 +64,13 @@ def run_embedding(tf_graph, optimizer, loss, similarity, normalized_embeddings,
                 print("Average loss at step", step, ":", average_loss)
                 average_loss = 0
 
+            # Printing similar words for some of the words in
+            # the validation set.
             if valid_verbose and (step % verbose_frequency == 0):
                 sim = similarity.eval()
                 for i in range(len(valid_examples)):
                     valid_word = reverse_dictionary[valid_examples[i]]
-                    top_k = 8 # number of nearest neighbors
+                    top_k = 8  # Number of nearest neighbors.
                     nearest = (-sim[i, :]).argsort()[1:top_k+1]
                     log = "Nearest to %s:" % valid_word
                     for k in range(top_k):
@@ -71,6 +81,7 @@ def run_embedding(tf_graph, optimizer, loss, similarity, normalized_embeddings,
 
 def run_lstm(tf_graph, optimizer, loss, reset_sample_state, tf_predictions,
     train_batches, valid_batches, valid_size, num_steps, char_func, summary_frequency):
+    """Runs the optimisation of a RNN LSTM model."""
     with tf.Session(graph=tf_graph['graph']) as session:
         tf.initialize_all_variables().run()
 
@@ -118,5 +129,5 @@ def run_lstm(tf_graph, optimizer, loss, reset_sample_state, tf_predictions,
                     b = valid_batches.next()
                     predictions = tf_predictions[1].eval({tf_graph['sample_ph']: b[0]})
                     valid_logprob = valid_logprob + training.utils.logprob(predictions, b[1])
-                print('Validation set perplexity: %.2f' % float(np.exp(
-                    valid_logprob / valid_size)))
+                print('Validation set perplexity: %.2f' %
+                    float(np.exp(valid_logprob / valid_size)))
