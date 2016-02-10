@@ -23,11 +23,11 @@ batch_size = 64
 num_unrollings = 10
 learning_rate = 10.0
 gradient_max_value = 1.25
-num_steps = 7001
+num_steps = 10001
 summary_frequency = 100
 exp_decay = {
-    'decay_steps': 5000,
-    'decay_rate': 0.1,
+    'decay_steps': 2500,
+    'decay_rate': 0.5,
     'staircase': True
 }
 
@@ -35,6 +35,7 @@ num_nodes = 64
 
 embedding_lr = 1.0
 embedding_size = 15 # Dimension of the embedding vector.
+dropout_prob = 0.2
 skip_batch_size = 128
 skip_window = 1 # How many words to consider left and right.
 num_skips = 2 # How many times to reuse an input to generate a label.
@@ -42,7 +43,7 @@ num_skips = 2 # How many times to reuse an input to generate a label.
 # valid_window = 100 # Only pick dev samples in the head of the distribution.
 # valid_examples = np.array(random.sample(range(valid_window), valid_size))
 num_sampled = 64 # Number of negative examples to sample.
-num_steps_embedding = 10001
+num_steps_embedding = 100001
 # num_points = 400
 
 # Preparing or loading the dataset.
@@ -90,7 +91,8 @@ valid_bibatches = training.batch.BatchGenerator(valid_bitext, 1, 1, bialphabet_s
 # Model.
 tf_graph, optimizer, loss, tf_predictions, reset_sample_state = \
     training.models.lstm_model(embedding_size, bialphabet_size, normalized_embeddings,
-        num_nodes, num_unrollings, batch_size, learning_rate, exp_decay, gradient_max_value)
+        num_nodes, num_unrollings, batch_size, learning_rate, exp_decay, gradient_max_value,
+        dropout_prob)
 
 # Running.
 training.graph_optimisation.run_lstm(tf_graph, optimizer, loss,

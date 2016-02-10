@@ -239,9 +239,11 @@ def lstm_model(input_size, output_size, embedding, num_nodes, num_unrollings, ba
         state = saved_state
         for i in train_inputs:
             if embedding is not None:
-                # Converting the input to the embedding
+                # Converting the input to the embedding.
                 indices = tf.argmax(i, 1)
                 i = tf.nn.embedding_lookup(embedding, indices)
+            # Dropout is only applied to inputs, not to recurrent connections.
+            i = tf.nn.dropout(i, 1 - dropout_prob)
             output, state = lstm_cell(i, output, state)
             outputs.append(output)
 
@@ -249,7 +251,11 @@ def lstm_model(input_size, output_size, embedding, num_nodes, num_unrollings, ba
         with tf.control_dependencies([saved_output.assign(output),
                                       saved_state.assign(state)]):
             # Classifier.
-            logits = tf.nn.xw_plus_b(tf.concat(0, outputs), w, b)
+            # Dropout is also applied to the output of the LSTM cell, only when
+            # used for the projection, as it is not recurrent.
+            outputs = tf.concat(0, outputs)
+            outputs = tf.nn.dropout(outputs, 1 - dropout_prob)
+            logits = tf.nn.xw_plus_b(outputs, w, b)
             loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
                 logits, tf.concat(0, train_labels)))
 
