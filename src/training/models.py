@@ -1,9 +1,21 @@
+# Provides functions that create the models used in the various assignments.
+# Derived from Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
+
 import numpy as np
+import random
 import tensorflow as tf
+from tensorflow.models.rnn import rnn_cell
+from tensorflow.models.rnn import seq2seq
+
+
+import dataset.utils
 import training.utils
 
 def create_fully_connected_weights(input_size, num_labels, num_hidden_nodes):
-    num_layers = len(num_hidden_nodes)
+    """Creates a list of weights corresponding to connections and biases of
+    a multi-layer fully connected model."""
     layer_sizes = [*num_hidden_nodes, num_labels]
 
     weights = []
@@ -23,7 +35,7 @@ def fully_connected_model(input_size, num_labels, num_hidden_nodes,
         valid_dataset, test_dataset, batch_size,
         learning_rate, beta = 0.0, dropout_prob = 0.0,
         exp_decay = None, method = 'gd'):
-    """"""
+    """Creates a multi-layer fully connected neural network."""
     def create_model(weights, inputs, labels = None):
         hidden_units = inputs
         num_hidden_layers = len(weights) // 2 - 1
@@ -35,6 +47,8 @@ def fully_connected_model(input_size, num_labels, num_hidden_nodes,
 
             hidden_units = tf.nn.relu(tf.matmul(hidden_units, cur_weights) + cur_biases)
             if labels is not None:
+                # If labels are specified, the graph will be used for training,
+                # so we apply dropout.
                 hidden_units = tf.nn.dropout(hidden_units, 1 - dropout_prob)
 
             regularisation_term = regularisation_term + tf.nn.l2_loss(cur_weights)
@@ -47,6 +61,7 @@ def fully_connected_model(input_size, num_labels, num_hidden_nodes,
         regularisation_term = regularisation_term + tf.nn.l2_loss(cur_weights)
 
         if labels is not None:
+            # Only when training.
             loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(out_logits, labels))
             loss = loss + beta * regularisation_term
             return out_prob, loss
@@ -97,6 +112,7 @@ def fully_connected_model(input_size, num_labels, num_hidden_nodes,
 # Skip-gram.
 def skipgram_model(vocabulary_size, embedding_size, batch_size, num_sampled, valid_examples,
     learning_rate):
+    """Creates a model for learning a word embedding using skipgrams."""
     graph = tf.Graph()
     with graph.as_default():
         # Input data.
@@ -141,6 +157,7 @@ def skipgram_model(vocabulary_size, embedding_size, batch_size, num_sampled, val
 
 def cbow_model(vocabulary_size, embedding_size, context_length, batch_size,
     num_sampled, valid_examples, learning_rate):
+    """Creates a model for learning a word embedding using CBOW."""
     input_batch_size = context_length * batch_size
 
     graph = tf.Graph()
@@ -149,7 +166,10 @@ def cbow_model(vocabulary_size, embedding_size, context_length, batch_size,
         tf_train_dataset = tf.placeholder(tf.int32, shape=[input_batch_size])
         tf_train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
 
-        word_mean_op = tf.constant(
+        # This sums the input embeddings in a batch of size input_batch_size,
+        # by group of context_length. This results in an input vector with
+        # batch_size rows.
+        word_mean_op = tf.constant((1.0 / context_length) *
             np.kron(np.eye(batch_size), np.ones([1, context_length])), dtype=tf.float32)
 
         # Variables.
@@ -191,6 +211,7 @@ def cbow_model(vocabulary_size, embedding_size, context_length, batch_size,
 # LSTM.
 def lstm_model(input_size, output_size, embedding, num_nodes, num_unrollings, batch_size,
     learning_rate, exp_decay = None, gradient_max_value = 1.25, dropout_prob = 0.0):
+    """Creates a LSTM model to learn symbol sequences."""
 
     graph = tf.Graph()
     with graph.as_default():
@@ -231,7 +252,7 @@ def lstm_model(input_size, output_size, embedding, num_nodes, num_unrollings, ba
             train_data.append(
                 tf.placeholder(tf.float32, shape=[batch_size, before_embedding_size]))
         train_inputs = train_data[:num_unrollings]
-        train_labels = train_data[1:]  # labels are inputs shifted by one time step.
+        train_labels = train_data[1:]  # Labels are inputs shifted by one time step.
 
         # Unrolled LSTM loop.
         outputs = list()
@@ -302,3 +323,143 @@ def lstm_model(input_size, output_size, embedding, num_nodes, num_unrollings, ba
     tf_predictions = [train_prediction, sample_prediction]
 
     return tf_graph, optimizer, loss, tf_predictions, reset_sample_state
+
+# Reverse word RNN.
+class ReverseWordModel(object):
+    def __init__(self, vocab_size, sequence_length, num_units,
+        max_gradient_norm, batch_size, learning_rate,
+        learning_rate_decay_factor):
+        self.vocab_size = vocab_size
+        self.sequence_length = sequence_length
+        self.batch_size = batch_size
+        self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
+        self.learning_rate_decay_op = self.learning_rate.assign(
+            self.learning_rate * learning_rate_decay_factor)
+        self.global_step = tf.Variable(0, trainable=False)
+
+        w = training.utils.gaussian_weights_variable([num_units, self.vocab_size])
+        b = tf.Variable(tf.zeros([self.vocab_size]))
+
+        lstm_cell = rnn_cell.LSTMCell(num_units, vocab_size)
+
+        self.encoder_inputs = []
+        self.decoder_inputs = []
+        self.target_weights = []
+        for _ in range(sequence_length):
+            self.encoder_inputs.append(tf.placeholder(
+                tf.float32, shape=(batch_size, self.vocab_size)))
+            self.decoder_inputs.append(tf.placeholder(
+                tf.float32, shape=(batch_size, self.vocab_size)))
+            self.target_weights.append(tf.placeholder(
+                tf.float32, shape=(batch_size,)))
+
+        # Decoder has one extra cell because it starts with the GO symbol,
+        # and the targets are shifted by one.
+        # Not sure this is actually useful, as it is always set to 0.
+        # As this is inspired by TensorFlow seq2seq models, there might be
+        # something dodgy in there.
+        self.decoder_inputs.append(tf.placeholder(
+            tf.float32, shape=(batch_size, self.vocab_size)))
+        self.target_weights.append(np.ones((batch_size,)))
+
+        # Targets used by the sequence loss must be integer indices.
+        targets = [tf.cast(tf.argmax(i, 1), dtype=tf.int32)
+            for i in self.decoder_inputs[1:]]
+
+        outputs, self.state = seq2seq.basic_rnn_seq2seq(
+            self.encoder_inputs, self.decoder_inputs, lstm_cell)
+
+        self.logits = [tf.nn.xw_plus_b(o, w, b) for o in outputs]
+        self.loss = seq2seq.sequence_loss(self.logits[:self.sequence_length],
+            targets, self.target_weights[:self.sequence_length],
+            self.vocab_size)
+
+        params = tf.trainable_variables()
+        opt = tf.train.GradientDescentOptimizer(self.learning_rate)
+        gradients = tf.gradients(self.loss, params)
+        clipped_gradients, self.gradient_norms = tf.clip_by_global_norm(
+            gradients, max_gradient_norm)
+        self.updates = opt.apply_gradients(
+            zip(clipped_gradients, params), global_step=self.global_step)
+
+        self.saver = tf.train.Saver(tf.all_variables())
+
+    def step(self, session, encoder_inputs, decoder_inputs, target_weights,
+        forward_only):
+        input_feed = {}
+        for l in range(self.sequence_length):
+            input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
+            input_feed[self.target_weights[l].name] = target_weights[l]
+            input_feed[self.decoder_inputs[l].name] = decoder_inputs[l]
+
+        # Since our targets are decoder inputs shifted by one, we need one more.
+        # If the last target is always 0 (PAD), and its weight is always 0,
+        # what's the point of having it?
+        last_target = self.decoder_inputs[self.sequence_length].name
+        input_feed[last_target] = np.zeros((self.batch_size, self.vocab_size))
+
+        # Output feed: depends on whether we do a backward step or not.
+        if not forward_only:
+            output_feed = [self.updates, self.gradient_norms, self.loss]
+        else:
+            output_feed = [self.loss]
+            for l in self.logits[:self.sequence_length]:
+                output_feed.append(l)
+
+        outputs = session.run(output_feed, input_feed)
+        if not forward_only:
+            # Gradient norm, loss, no outputs.
+            return outputs[1], outputs[2], None
+        else:
+            # No gradient norm, loss, outputs.
+            return None, outputs[0], outputs[1:]
+
+    def get_batch(self, data):
+        encoder_inputs, decoder_inputs = [], []
+
+        for _ in range(self.batch_size):
+            encoder_input, decoder_input = random.choice(data)
+
+            # Encoder inputs are padded.
+            encoder_pad = [dataset.utils.PAD_ID] * (self.sequence_length - len(encoder_input))
+            encoder_inputs.append(list(encoder_pad + encoder_input))
+
+            # Decoder inputs get an extra "GO" symbol, and are padded then.
+            # This is weird as well. If the decoder input length is exactly
+            # self.sequence_length, then we end up with a sequence of length
+            # self.sequence_length + 1. The last symbol gets ignored in the
+            # rest of the batch creation.
+            decoder_pad_size = self.sequence_length - len(decoder_input) - 1
+            decoder_inputs.append([dataset.utils.GO_ID] + decoder_input +
+                                 [dataset.utils.PAD_ID] * decoder_pad_size)
+
+        # Now we create batch-major vectors from the data selected above.
+        batch_encoder_inputs, batch_decoder_inputs, batch_weights = [], [], []
+
+        # Batch encoder inputs are just re-indexed encoder_inputs.
+        for length_idx in range(self.sequence_length):
+            in_idx = [encoder_inputs[batch_idx][length_idx]
+                for batch_idx in range(self.batch_size)]
+            batch_encoder_inputs.append(dataset.utils.idx_to_onehot(
+                np.array(in_idx), self.vocab_size))
+
+        # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
+        for length_idx in range(self.sequence_length):
+            out_idx = [decoder_inputs[batch_idx][length_idx]
+                for batch_idx in range(self.batch_size)]
+            batch_decoder_inputs.append(dataset.utils.idx_to_onehot(
+                np.array(out_idx), self.vocab_size))
+
+            # Create target_weights to be 0 for targets that are padding.
+            batch_weight = np.ones(self.batch_size, dtype=np.float32)
+            for batch_idx in range(self.batch_size):
+                # We set weight to 0 if the corresponding target is a PAD symbol.
+                # The corresponding target is decoder_input shifted by 1 forward.
+                if length_idx < self.sequence_length - 1:
+                    target = decoder_inputs[batch_idx][length_idx + 1]
+                if length_idx == self.sequence_length - 1 \
+                    or target == dataset.utils.PAD_ID:
+                    batch_weight[batch_idx] = 0.0
+            batch_weights.append(batch_weight)
+
+        return batch_encoder_inputs, batch_decoder_inputs, batch_weights
