@@ -195,9 +195,9 @@ def lstm_model(input_size, output_size, embedding, num_nodes, num_unrollings, ba
     graph = tf.Graph()
     with graph.as_default():
         # [ix, fx, cx, ox]
-        x_mat = tf.Variable(tf.truncated_normal([input_size, 4*num_nodes], -0.1, 0.1))
+        x_mat = training.utils.gaussian_weights_variable([input_size, 4*num_nodes])
         # [im, fm, cm, om]
-        o_mat = tf.Variable(tf.truncated_normal([num_nodes, 4*num_nodes], -0.1, 0.1))
+        o_mat = training.utils.gaussian_weights_variable([num_nodes, 4*num_nodes])
         # [ib, fb, cb, ob]
         b_vec = tf.Variable(tf.zeros([1, 4*num_nodes]))
 
