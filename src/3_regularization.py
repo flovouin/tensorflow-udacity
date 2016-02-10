@@ -1,4 +1,8 @@
 #! /usr/bin/env python3
+#
+# Solutions to the third assignment of Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
 
 import numpy as np
 import tensorflow as tf
@@ -47,7 +51,7 @@ valid_labels = utils.idx_to_onehot(valid_labels, num_labels)
 test_dataset = utils.flatten_batch(test_dataset)
 test_labels = utils.idx_to_onehot(test_labels, num_labels)
 
-# Logistic regression with l2 regularisation
+# Logistic regression with l2 regularisation.
 print('Logistic regression with l2 regularisation...')
 
 tf_graph, optimizer, loss, tf_predictions = training.models.fully_connected_model(
@@ -58,7 +62,7 @@ tf_graph, optimizer, loss, tf_predictions = training.models.fully_connected_mode
 training.graph_optimisation.run(tf_graph, optimizer, loss, tf_predictions,
     train_dataset, train_labels, valid_labels, test_labels, num_steps, batch_size)
 
-# Hidden layer with l2 regularisation
+# Hidden layer with l2 regularisation.
 print('\nRelaunching optimisation with a hidden layer and regularisation...')
 
 tf_graph, optimizer, loss, tf_predictions = training.models.fully_connected_model(
@@ -89,6 +93,7 @@ training.graph_optimisation.run(tf_graph, optimizer, loss, tf_predictions,
         valid_labels, test_labels, num_steps, batch_size)
 
 # Proper model with several hidden layers.
+# When trained longer, this achieves between 96 and 97% accuracy.
 print('\nUsing 3 hidden layers with gradient decay (would be more useful with more epochs)...')
 
 tf_graph, optimizer, loss, tf_predictions = training.models.fully_connected_model(
