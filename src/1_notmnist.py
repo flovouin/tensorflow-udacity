@@ -1,11 +1,15 @@
 #! /usr/bin/env python3
+#
+# Solutions to the first assignment of Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
 
+from IPython.display import display, Image
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import sys
-from IPython.display import display, Image
 from sklearn.linear_model import LogisticRegression
+import sys
 
 from dataset import not_mnist, utils
 
@@ -41,12 +45,14 @@ print('Looking for duplicate samples in the data.')
 # There is a small caveat when using hashes:
 # Duplicates will be removed in each set, so this
 # might reduce the estimated overlap between sets.
-# Also, there can be colisions between hashes.
+# Also, there can be collisions between hashes.
 
 def hash_img(sample):
+    """Computes a simple hash for an image."""
     return hash(sample.data.tobytes())
 
 def hash_set(dataset):
+    """Creates a set of hashes for the images in a dataset."""
     return {hash_img(dataset[i]): i for i in range(len(dataset))}
 
 print('Creating hashtable for training set...')
@@ -60,25 +66,31 @@ sets_names = ("training", "test", "validation")
 sets_sizes = (len(train_dataset), len(test_dataset), len(valid_dataset))
 sets = [set(s.keys()) for s in (tr_set, te_set, va_set)]
 
+# A simple double loop to compare each pair of sets.
 for s1 in range(len(sets)):
     h1 = sets[s1]
 
-    # The duplicates inside a single set are removed simply because
+    # The duplicates within a set are already removed simply because
     # the same hash is not added twice to the set.
     num_duplicates = sets_sizes[s1] - len(h1)
-    print('Number of duplicates in the {0} set: {1}/{2}'.format(sets_names[s1], num_duplicates, sets_sizes[s1]))
+    print('Number of duplicates in the {0} set: {1}/{2}'.format(
+        sets_names[s1], num_duplicates, sets_sizes[s1]))
 
     for s2 in range(s1+1, len(sets)):
         h2 = sets[s2]
 
         # This is the ratio of common samples between the sets from
-        # which duplicates were already removed. This might slightly
+        # which "intra-set" duplicates were already removed. This might slightly
         # underestimates the true overlap in the original data.
         num_common = len(h1.intersection(h2))
         ratio_common = num_common / min(len(h1), len(h2))
-        print('Between {0} and {1}: {2}'.format(sets_names[s1], sets_names[s2], ratio_common))
+        print('Ratio of common samples between {0} and {1}: {2}'.format(
+            sets_names[s1], sets_names[s2], ratio_common))
 
 # Removing duplicates from validation and test set.
+# The duplicates within the training set are removed,
+# but not the samples it shares with the validation and test sets.
+
 def get_unique_idx(original_dic, others):
     """Returns the list of values in original_dic that correspond to keys
     that are only contained in original_dic, and not in any of the dictionaries
@@ -90,7 +102,7 @@ def get_unique_idx(original_dic, others):
         unique_keys = unique_keys - set(other_dic.keys())
     return [original_dic[i] for i in unique_keys]
 
-print('\nCreating sanitised dataset...')
+print('\nCreating sanitised datasets...')
 san_train_idx = get_unique_idx(tr_set, [])
 san_train_dataset = train_dataset[san_train_idx, :, :]
 san_train_labels = train_labels[san_train_idx]
@@ -130,6 +142,7 @@ for num_samples in num_samples_list:
         if train != 'y':
             continue
 
+    # Multinomial model is only available when using the L-BFGS solver.
     logistic_model = LogisticRegression(multi_class = 'multinomial', solver = 'lbfgs')
     logistic_model.fit(flat_train_dataset[:num_samples, :], train_labels[:num_samples])
 
