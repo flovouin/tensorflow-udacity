@@ -1,3 +1,8 @@
+# Provides utility functions to download and preprocess the notMNIST
+# dataset. Derived from Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
+
 import numpy as np
 import os
 from scipy import ndimage
@@ -14,22 +19,31 @@ test_data_file_size = 8458043
 local_train_data_filename = 'notMNIST_large.tar.gz'
 local_test_data_filename = 'notMNIST_small.tar.gz'
 pickle_file = 'notMNIST.pickle'
+min_train_images = 450000
+max_train_images = 550000
+min_test_images = 18000
+max_test_images = 20000
 
 num_classes = 10
 str_labels = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
-image_size = 28  # Pixel width and height.
+image_size = 28      # Pixel width and height.
 pixel_depth = 255.0  # Number of levels per pixel.
 
 def get_local_filenames(folder):
+    """Returns the file paths for the training and test sets archives."""
     return os.path.join(folder, local_train_data_filename), os.path.join(folder, local_test_data_filename)
 
 def get_pickle_filename(folder):
+    """Returns the file path for the dataset pickle file."""
     return os.path.join(folder, pickle_file)
 
 def extract_file(filename):
-    root = os.path.splitext(os.path.splitext(filename)[0])[0]  # remove .tar.gz
+    """Extracts a dataset archives and checks the number of folders (classes) in it.
+    Returns the list of folder corresponding to classes."""
+    root = os.path.splitext(os.path.splitext(filename)[0])[0]
 
     if os.path.isdir(root):
+        # Lazily checking whether the dataset has already been extracted.
         print('Directory already exists, assuming all the data is there.')
     else:
         tar = tarfile.open(filename)
@@ -50,6 +64,8 @@ def extract_file(filename):
     return data_folders
 
 def load_from_folders(data_folders, min_num_images, max_num_images):
+    """Loads images from the given data folders and returns a numpy array containing
+    all images, as well as the corresponding labels."""
     dataset = np.ndarray(shape=(max_num_images, image_size, image_size), dtype=np.float32)
     labels = np.ndarray(shape=(max_num_images), dtype=np.int32)
     label_index = 0
@@ -65,7 +81,9 @@ def load_from_folders(data_folders, min_num_images, max_num_images):
 
             image_file = os.path.join(folder, image)
             try:
-                image_data = (ndimage.imread(image_file).astype(float) - pixel_depth / 2) / pixel_depth
+                image_data = ndimage.imread(image_file)
+                # This approximately centres and reduces the data.
+                image_data = (image_data.astype(float) - pixel_depth / 2.0) / pixel_depth
                 if image_data.shape != (image_size, image_size):
                     raise Exception('Unexpected image shape: %s' % str(image_data.shape))
 
@@ -93,6 +111,7 @@ def load_from_folders(data_folders, min_num_images, max_num_images):
 
 def save_to_pickle(train_dataset, train_labels, valid_dataset, valid_labels,
          test_dataset, test_labels, pickle_file):
+    """Saves the dataset to a pickle file."""
     try:
         f = open(pickle_file, 'wb')
         save_dic = {
@@ -113,6 +132,7 @@ def save_to_pickle(train_dataset, train_labels, valid_dataset, valid_labels,
     print('Compressed pickle size:', statinfo.st_size)
 
 def read_from_pickle(pickle_file):
+    """Reads the dataset from a pickle file."""
     with open(pickle_file, 'rb') as f:
         save = pickle.load(f)
         train_dataset = save['train_dataset']
@@ -125,6 +145,7 @@ def read_from_pickle(pickle_file):
         return train_dataset, train_labels, valid_dataset, valid_labels, test_dataset, test_labels
 
 def prepare_dataset(train_size, valid_size, folder):
+    """Downloads and preprocesses the dataset, or loads it from a pickle file."""
     pickle_file = get_pickle_filename(folder)
 
     if os.path.isfile(pickle_file):
@@ -142,8 +163,10 @@ def prepare_dataset(train_size, valid_size, folder):
         test_folders = extract_file(test_file)
 
         print('Creating numpy dataset...')
-        train_dataset, train_labels = load_from_folders(train_folders, 450000, 550000)
-        test_dataset, test_labels = load_from_folders(test_folders, 18000, 20000)
+        train_dataset, train_labels = load_from_folders(
+                train_folders, min_train_images, max_train_images)
+        test_dataset, test_labels = load_from_folders(
+                test_folders, min_test_images, max_test_images)
 
         print('Randomising input...')
         train_dataset, train_labels = utils.randomize(train_dataset, train_labels)
