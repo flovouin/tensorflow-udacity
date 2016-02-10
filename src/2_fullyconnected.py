@@ -1,4 +1,8 @@
 #! /usr/bin/env python3
+#
+# Solutions to the second assignment of Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
 
 import numpy as np
 import tensorflow as tf
@@ -40,7 +44,6 @@ with graph.as_default():
     tf_test_dataset = tf.constant(test_dataset)
 
     # Variables.
-    # weights = tf.Variable(tf.truncated_normal([input_size, num_labels]))
     weights = training.utils.gaussian_weights_variable([input_size, num_labels])
     biases = tf.Variable(tf.zeros([num_labels]))
 
@@ -69,6 +72,8 @@ training.graph_optimisation.run(tf_graph, optimizer, loss, tf_predictions,
 print('\nRelaunching optimisation with a hidden layer...')
 
 def create_model(weights, inputs, labels = None):
+    """Creates a model from given weights and inputs. Returns
+    the output probabilities, and the loss if the labels are specified."""
     hidden_units = tf.nn.relu(tf.matmul(inputs, weights[0]) + weights[1])
     out_logits = tf.matmul(hidden_units, weights[2]) + weights[3]
     out_prob = tf.nn.softmax(out_logits)
