@@ -1,4 +1,8 @@
 #! /usr/bin/env python3
+#
+# Solutions to the fourth assignment of Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
 
 import numpy as np
 import tensorflow as tf
@@ -93,7 +97,7 @@ with graph.as_default():
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
 
     # Optimizer.
-    global_step = tf.Variable(0)  # count the number of steps taken.
+    global_step = tf.Variable(0)
     tf_lr = tf.train.exponential_decay(
         learning_rate, global_step, decay_steps, decay_rate, staircase = True)
     optimizer = tf.train.GradientDescentOptimizer(tf_lr).minimize(
