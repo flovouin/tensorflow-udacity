@@ -1,4 +1,8 @@
 #! /usr/bin/env python3
+#
+# Solutions to the fifth assignment of Tensorflow's Udacity tutorial.
+#
+# Flo Vouin - 2016
 
 import collections
 import numpy as np
@@ -12,7 +16,7 @@ import training.utils
 data_folder = '../data'
 vocabulary_size = 50000
 
-batch_size = 128
+batch_size_skip = 128
 batch_size_cbow = 64
 learning_rate = 1.0
 num_steps = 100001
@@ -20,7 +24,8 @@ num_steps = 100001
 embedding_size = 128 # Dimension of the embedding vector.
 skip_window = 1 # How many words to consider left and right.
 num_skips = 2 # How many times to reuse an input to generate a label.
-# We pick a random validation set to sample nearest neighbors. here we limit the
+
+# We pick a random validation set to sample nearest neighbors. Here we limit the
 # validation samples to the words that have a low numeric ID, which by
 # construction are also the most frequent.
 valid_size = 16 # Random set of words to evaluate similarity on.
@@ -34,12 +39,13 @@ num_points = 400
 _, data, count, dictionary, reverse_dictionary = \
     text8.prepare_dataset(vocabulary_size, data_folder)
 
-# Defining how batches are created when training the skip-gram model.
-skipgram_batches = batch.SkipgramBatchGenerator(data, batch_size, num_skips, skip_window)
+# Initialisaing batch generators.
+skipgram_batches = batch.SkipgramBatchGenerator(data, batch_size_skip, num_skips, skip_window)
 cbow_batches = batch.CBOWBatchGenerator(data, batch_size_cbow, skip_window)
 
+# Skipgram.
 tf_graph, optimizer, loss, normalized_embeddings, similarity = \
-    models.skipgram_model(vocabulary_size, embedding_size, batch_size, num_sampled,
+    models.skipgram_model(vocabulary_size, embedding_size, batch_size_skip, num_sampled,
         valid_examples, learning_rate)
 
 print('Training using skipgram model...')
